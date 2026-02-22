@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import documentRouter from "./routes/documentRoutes.js";
 import userRouter from "./routes/userRoutes.js"
-const allowedOrigins = ['http://localhost:5173']
+const allowedOrigins = ['http://localhost:5173', process.env.FRONTEND_URL]
 
 
 const app = express();
