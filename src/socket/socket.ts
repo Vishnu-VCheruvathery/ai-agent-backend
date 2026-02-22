@@ -10,6 +10,7 @@ export async function initSocket(httpServer: http.Server) {
     cors: {
       origin: `${process.env.FRONTEND_URL}`,
       methods: ["GET", "POST"],
+      credentials: true,
     },
   });
 
