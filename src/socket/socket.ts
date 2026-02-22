@@ -8,7 +8,7 @@ let io: Server;
 export async function initSocket(httpServer: http.Server) {
   io = new Server(httpServer, {
     cors: {
-      origin: "http://localhost:5173",
+      origin: `${process.env.FRONTEND_URL}`,
       methods: ["GET", "POST"],
     },
   });
