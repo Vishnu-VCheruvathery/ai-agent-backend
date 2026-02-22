@@ -17,7 +17,15 @@ import { QueueEvents } from "bullmq";
 import {Redis} from 'ioredis';
 import { ocrQueue, summaryQueue } from "./worker/src.js";
 
+const PORT = process.env.PORT || 3000;
+
 const httpServer = createServer(app);
+
+const io = await initSocket(httpServer);
+
+httpServer.listen(PORT, () => {
+  console.log("🚀 Server running on port 3000");
+});
 
 const connection = new Redis(process.env.REDIS_URL!, {maxRetriesPerRequest: null});
 
@@ -37,14 +45,6 @@ export function extractText(content: any): string {
   return JSON.stringify(content);
 }
 
-
-// ✅ Start server immediately
-httpServer.listen(3000, () => {
-  console.log("🚀 Server running on port 3000");
-});
-
-// ✅ THEN initialize socket
-const io = await initSocket(httpServer);
 
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
