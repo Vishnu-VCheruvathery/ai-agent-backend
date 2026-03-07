@@ -15,7 +15,7 @@ import { Message } from "./models/message.js";
 import { initSocket } from "./socket/socket.js";
 import { QueueEvents } from "bullmq";
 import {Redis} from 'ioredis';
-import { ocrQueue, summaryQueue } from "./worker/src.js";
+import {  summaryQueue, ocrQueue } from "./worker/src.js";
 
 const PORT = process.env.PORT || 3000;
 
@@ -30,7 +30,7 @@ httpServer.listen(PORT, () => {
 const connection = new Redis(process.env.REDIS_URL!, {maxRetriesPerRequest: null});
 
 if(connection){
-    console.log("Redis connected");
+    console.log("Connecting to:", connection);
 }
 
 export function extractText(content: any): string {

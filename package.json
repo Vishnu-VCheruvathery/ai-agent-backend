@@ -12,6 +12,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1000.0",
     "@chroma-core/default-embed": "^0.1.8",
     "@chroma-core/google-gemini": "^0.1.8",
     "@chroma-core/sentence-transformer": "^0.1.0",

@@ -3,6 +3,9 @@ import { uploadQueue } from "../worker/src.js";
 import { GoogleGenAI } from "@google/genai";
 import { ocrCollection } from "../models/chromaCollection.js";
 import { Message } from "../models/message.js";
+import { s3Client } from "../utils/tools.js";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+
 
 const ai = new GoogleGenAI({});
 
@@ -15,7 +18,18 @@ export const uploadDocument = async(req: Request,res: Response) => {
             return res.status(400).json({message: 'No file uploaded'})
          }
 
-         await uploadQueue.add('upload', {file,  convId});
+         const fileName = `${Date.now()}-${file?.originalname}`
+
+          const uploadParams = {
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: `uploads/${fileName}`,
+            Body: file?.buffer,
+            ContentType: file?.mimetype,
+        }
+
+        await s3Client.send(new PutObjectCommand(uploadParams))
+
+         await uploadQueue.add('upload', {key: uploadParams.Key,  convId, fileName, fileType: file.mimetype});
           
 
         return res.status(200).json({message: 'File uploaded successfully!'})
