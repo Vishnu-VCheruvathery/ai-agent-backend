@@ -77,8 +77,6 @@ CONTENT=${text}
 `;
     });
 
-    console.log('the formatted: ', formatted)
-
     return formatted.join("\n");
   },
   {

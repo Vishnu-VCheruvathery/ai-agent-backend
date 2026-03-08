@@ -29,9 +29,7 @@ httpServer.listen(PORT, () => {
 
 const connection = new Redis(process.env.REDIS_URL!, {maxRetriesPerRequest: null});
 
-if(connection){
-    console.log("Connecting to:", connection);
-}
+
 
 export function extractText(content: any): string {
   if (typeof content === "string") return content;
@@ -57,7 +55,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("msg", async (data) => {
-   console.log('socket data: ', data)
+
     try {
       await Message.create({
         conversationId: data.convId,
