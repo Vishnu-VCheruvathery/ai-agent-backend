@@ -20,7 +20,8 @@ const MessagesState = z.object({
 ),
   llmCalls: z.number().optional(),
   mode: z.string(),
-  answer: z.string().optional()
+  answer: z.string().optional(),
+  context: z.string().optional()
 });
 
 function isPageQuestion(query: string) {
@@ -33,6 +34,21 @@ function isPageQuestion(query: string) {
     q.includes("mentioned") ||
     q.includes("locate")
   );
+}
+
+function getLastUserQuestion(messages: any[]){
+  const reversed = [...messages].reverse();
+  const user = reversed.find((m) => m instanceof HumanMessage);
+
+  if(!user) return "";
+
+  if(typeof user.content === "string") return user.content;
+
+  if(Array.isArray(user.content)){
+    return user.content.map((c) => ("text" in c ? c.text : "")).join("");
+  }
+
+  return "";
 }
 
 export const searchDB = tool(
@@ -118,119 +134,33 @@ function getModelWithTools(mode: string) {
   return model.bindTools([searchDB]);
 }
 
-async function toolRouter(state: z.infer<typeof MessagesState>) {
-  const modelWithTools = getModelWithTools(state.mode);
+async function  retrieveNode(state: z.infer<typeof MessagesState>) {
+  const question = getLastUserQuestion(state.messages);
 
-  const ai = await modelWithTools.invoke([
-    new SystemMessage(`
-You are a tool router.
-You MUST call the correct tool.
-Do not answer with text.
-`),
-    ...state.messages,
-  ]);
+  let context = "";
 
-  return {
-    ...state,
-    messages: [...state.messages, ai],
-  };
-}
+  if(state.mode === "docs_only"){
+    context = await searchDB.invoke({
+      query: question,
+      convId: state.convId
+    })
+  }
 
-async function toolNode(state: z.infer<typeof MessagesState>) {
-  const last = state.messages[state.messages.length - 1];
-  if (!isAIMessage(last)) return state;
-
-  const outputs: ToolMessage[] = [];
-
-  for (const call of last.tool_calls ?? []) {
-    const tool = toolsByName[call.name as keyof typeof toolsByName];
-
-    if (!tool) throw new Error("Unknown tool: " + call.name);
-
-    let args = call.args;
-
-    if (call.name === "search_db") {
-      args = { ...args, convId: state.convId };
-    }
-
-    //@ts-ignore
-    const obs = await tool.invoke(args);
-
-    outputs.push(
-      new ToolMessage({
-        content: String(obs),
-        tool_call_id: call.id!,
-      })
-    );
+  if(state.mode === "web_only"){
+    context = await googleSearchTool.invoke({
+      query: question,
+    })
   }
 
   return {
     ...state,
-    messages: [...state.messages, ...outputs],
-  };
+    context,
+  }
 }
+
 
 async function finalAnswer(state: z.infer<typeof MessagesState>) {
-  function toText(content: any): string {
-    if (typeof content === "string") return content;
-    if (Array.isArray(content)) {
-      return content
-        .map((c) => ("text" in c ? c.text : ""))
-        .join("");
-    }
-    return "";
-  }
-
-  const reversed = [...state.messages].reverse();
-
-  const userMsg = reversed.find(isHumanMessage);
-  const question = userMsg ? toText(userMsg.content) : "";
-
-  // ✅ PAGE LOOKUP MODE (no Gemini)
-  if (state.mode === 'docs_only' && isPageQuestion(question)) {
-    const toolMsg = reversed.find(isToolMessage);
-
-    if (!toolMsg) {
-      const aiMsg = new AIMessage("NOT_FOUND");
-      return {
-        ...state,
-        messages: [...state.messages, aiMsg],
-        answer: "NOT_FOUND",
-      };
-    }
-
-    const toolText = toText(toolMsg.content);
-
-    if (toolText === "NO_RELEVANT_CONTEXT") {
-      const aiMsg = new AIMessage("NOT_FOUND");
-      return {
-        ...state,
-        messages: [...state.messages, aiMsg],
-        answer: "NOT_FOUND",
-      };
-    }
-
-    const matches = toolText.match(/PAGE=(\d+)/g) || [];
-
-    const pages = matches.map((p) =>
-      Number(p.replace("PAGE=", "")) + 1
-    );
-
-    const uniquePages = Array.from(new Set(pages));
-
-    const finalText = uniquePages.length
-      ? `Mentioned on page(s): ${uniquePages.join(", ")}`
-      : "NOT_FOUND";
-
-    // ✅ Push AIMessage so socket sees correct output
-    const aiMsg = new AIMessage(finalText);
-
-    return {
-      ...state,
-      messages: [...state.messages, aiMsg],
-      answer: finalText,
-    };
-  }
+   const question = getLastUserQuestion(state.messages);
 
   const systemPrompt =
     state.mode === "web_only"
@@ -254,13 +184,19 @@ Rules:
 
   const aiMessage = await model.invoke([
     new SystemMessage(systemPrompt),
-    ...state.messages,
+    new HumanMessage(`
+      Question:
+      ${question}
+
+      Context: 
+      ${state.context}
+      `)
   ]);
 
   return {
     ...state,
     messages: [...state.messages, aiMessage], // ✅ important
-    answer: toText(aiMessage.content),
+    answer: typeof aiMessage.content === "string" ? aiMessage.content : JSON.stringify(aiMessage.content),
   };
 }
 
@@ -268,20 +204,10 @@ Rules:
 
 
 const agent = new StateGraph(MessagesState)
-  .addNode("toolRouter", toolRouter)
-  .addNode("toolNode", toolNode)
+  .addNode("retrieve", retrieveNode)
   .addNode("finalAnswer", finalAnswer)
-
-  .addEdge(START, "toolRouter")
-
-  .addConditionalEdges("toolRouter", (state) => {
-    const last = state.messages[state.messages.length - 1];
-    //@ts-ignore
-    return last.tool_calls?.length ? "toolNode" : "finalAnswer";
-  })
-
-  .addEdge("toolNode", "finalAnswer")
-
+  .addEdge(START, "retrieve")
+  .addEdge("retrieve", "finalAnswer")
   .addEdge("finalAnswer", END)
   .compile();
 
