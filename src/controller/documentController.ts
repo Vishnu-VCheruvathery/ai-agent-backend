@@ -18,6 +18,10 @@ export const uploadDocument = async(req: Request,res: Response) => {
             return res.status(400).json({message: 'No file uploaded'})
          }
 
+         if(!convId || convId.length === 0){
+            return res.status(400).json({message: 'No conversation id'})
+         }
+
          const fileName = `${Date.now()}-${file?.originalname}`
 
           const uploadParams = {

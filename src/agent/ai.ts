@@ -24,17 +24,6 @@ const MessagesState = z.object({
   context: z.string().optional()
 });
 
-function isPageQuestion(query: string) {
-  const q = query.toLowerCase();
-
-  return (
-    q.includes("which page") ||
-    q.includes("what page") ||
-    q.includes("where is") ||
-    q.includes("mentioned") ||
-    q.includes("locate")
-  );
-}
 
 function getLastUserQuestion(messages: any[]){
   const reversed = [...messages].reverse();
